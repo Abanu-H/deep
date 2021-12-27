@@ -51,6 +51,7 @@ var (
 type cmp struct {
 	diff        []string
 	buff        []string
+	Diff        map[string]interface{}
 	floatFormat string
 }
 
@@ -66,12 +67,13 @@ var errorType = reflect.TypeOf((*error)(nil)).Elem()
 //
 // When comparing a struct, if a field has the tag `deep:"-"` then it will be
 // ignored.
-func Equal(a, b interface{}) []string {
+func Equal(a, b interface{}) map[string]interface{} {
 	aVal := reflect.ValueOf(a)
 	bVal := reflect.ValueOf(b)
 	c := &cmp{
 		diff:        []string{},
 		buff:        []string{},
+		Diff:        map[string]interface{}{},
 		floatFormat: fmt.Sprintf("%%.%df", FloatPrecision),
 	}
 	if a == nil && b == nil {
@@ -82,12 +84,12 @@ func Equal(a, b interface{}) []string {
 		c.saveDiff(a, "<nil pointer>")
 	}
 	if len(c.diff) > 0 {
-		return c.diff
+		return c.Diff
 	}
 
 	c.equals(aVal, bVal, 0)
 	if len(c.diff) > 0 {
-		return c.diff // diffs
+		return c.Diff // diffs
 	}
 	return nil // no diffs
 }
@@ -268,7 +270,7 @@ func (c *cmp) equals(a, b reflect.Value, level int) {
 		}
 
 		for _, key := range a.MapKeys() {
-			c.push(fmt.Sprintf("map[%v] ,", key))
+			c.push(fmt.Sprintf("map[%v]", key))
 
 			aVal := a.MapIndex(key)
 			bVal := b.MapIndex(key)
@@ -290,7 +292,7 @@ func (c *cmp) equals(a, b reflect.Value, level int) {
 				continue
 			}
 
-			c.push(fmt.Sprintf("map[%v] ,", key))
+			c.push(fmt.Sprintf("map[%v]", key))
 			c.saveDiff("<does not have key>", b.MapIndex(key))
 			c.pop()
 			if len(c.diff) >= MaxDiff {
@@ -300,7 +302,7 @@ func (c *cmp) equals(a, b reflect.Value, level int) {
 	case reflect.Array:
 		n := a.Len()
 		for i := 0; i < n; i++ {
-			c.push(fmt.Sprintf("array[%d] ,", i))
+			c.push(fmt.Sprintf("array[%d]", i))
 			c.equals(a.Index(i), b.Index(i), level+1)
 			c.pop()
 			if len(c.diff) >= MaxDiff {
@@ -338,7 +340,7 @@ func (c *cmp) equals(a, b reflect.Value, level int) {
 			n = bLen
 		}
 		for i := 0; i < n; i++ {
-			c.push(fmt.Sprintf("slice[%d] ,", i))
+			c.push(fmt.Sprintf("slice[%d]", i))
 			if i < aLen && i < bLen {
 				c.equals(a.Index(i), b.Index(i), level+1)
 			} else if i < aLen {
@@ -404,9 +406,10 @@ func (c *cmp) pop() {
 func (c *cmp) saveDiff(aval, bval interface{}) {
 	if len(c.buff) > 0 {
 		varName := strings.Join(c.buff, ".")
-		c.diff = append(c.diff, fmt.Sprintf("%s: %v,", varName, bval))
+		c.Diff[varName] = fmt.Sprintf("%v", bval)
+		c.diff = append(c.diff, fmt.Sprintf("%s: %v != %v", varName, aval, bval))
 	} else {
-		c.diff = append(c.diff, fmt.Sprintf("%v != %v, ", aval, bval))
+		c.diff = append(c.diff, fmt.Sprintf("%v != %v", aval, bval))
 	}
 }
 
